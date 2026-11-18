@@ -18,7 +18,7 @@ say() { [[ "$QUIET" -eq 1 ]] || printf '%s\n' "$*"; }
 step_q() { [[ "$QUIET" -eq 1 ]] || step "$*"; }
 
 say ""
-say "IDRAC7 unlock - precondition check"
+say "B2PHANTOM - precondition check"
 say "$(printf '%.0s-' {1..52})"
 
 step_q "1. Environment"

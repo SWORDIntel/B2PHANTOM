@@ -70,7 +70,7 @@ PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
-ExecStart=$TERM_BIN -T "iDRAC7 Postboot License" -e $POSTBOOT --interactive --as-service
+ExecStart=$TERM_BIN -T "B2PHANTOM Postboot" -e $POSTBOOT --interactive --as-service
 TimeoutSec=1200
 
 [Install]
