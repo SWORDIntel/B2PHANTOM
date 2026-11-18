@@ -30,6 +30,7 @@ set -euo pipefail
 
 need_ipmitool() {
 	command -v ipmitool >/dev/null 2>&1 || die "ipmitool missing - apt install ipmitool"
+	resolve_ipmitool
 	ipmi mc info >/dev/null 2>&1 || die "cannot reach the BMC over local KCS"
 }
 
