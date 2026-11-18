@@ -48,8 +48,10 @@ preflight() {
 
 	step "Checks"
 	# 'lan set' with no args prints usage listing ipsrc/ipaddr/etc when the
-	# command is supported; it exits non-zero, so match the output instead.
-	if ipmi lan set 1 2>&1 | grep -qi 'ipsrc'; then
+	# command is supported; it exits non-zero, so match the captured output
+	# instead of piping (grep -q + pipefail = SIGPIPE false failure).
+	lan_out="$(ipmi lan set 1 2>&1 || true)"
+	if [[ "$lan_out" == *[Ii]psrc* ]]; then
 		check_pass "lan set available" "can restore channel 1 IP config"
 	else
 		check_fail "lan set available" "cannot reconfigure BMC network via KCS"
