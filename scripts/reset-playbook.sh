@@ -44,7 +44,7 @@ preflight() {
 
 	step "Network plan"
 	ipmi lan print 1 2>/dev/null | grep -E 'IP Address Source|IP Address ' | sed 's/^/  /'
-	ipmi lan print 2 2>/dev/null | grep -E 'IP Address Source|IP Address ' | sed 's/^/  /'
+	ipmi lan print 2 2>/dev/null | grep -E 'IP Address Source|IP Address ' | sed 's/^/  /' || true
 
 	step "Checks"
 	if ipmi lan set 1 >/dev/null 2>&1; then
