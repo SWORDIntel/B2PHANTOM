@@ -47,7 +47,9 @@ preflight() {
 	ipmi lan print 2 2>/dev/null | grep -E 'IP Address Source|IP Address ' | sed 's/^/  /' || true
 
 	step "Checks"
-	if ipmi lan set 1 >/dev/null 2>&1; then
+	# 'lan set' with no args prints usage listing ipsrc/ipaddr/etc when the
+	# command is supported; it exits non-zero, so match the output instead.
+	if ipmi lan set 1 2>&1 | grep -qi 'ipsrc'; then
 		check_pass "lan set available" "can restore channel 1 IP config"
 	else
 		check_fail "lan set available" "cannot reconfigure BMC network via KCS"
@@ -58,7 +60,10 @@ preflight() {
 		check_warn "delloem lan get" "NIC selection restore unverified"
 	fi
 
-	ok "If everything above passed, the physical reset is safe to perform:"
+	if [[ "$CHECKS_FAILED" -gt 0 ]]; then
+		die "preflight failed - do not perform the reset yet"
+	fi
+	ok "Preflight clean - the physical reset is safe to perform:"
 	info "  A. hold the front-panel i-button ~15 s (factory defaults), or"
 	info "  B. power off, pull both power cords 30 s, power on (state drain only)"
 }
