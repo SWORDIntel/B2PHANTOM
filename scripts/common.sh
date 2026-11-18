@@ -69,7 +69,7 @@ load_config() {
 	LICENSE_XML="licenses/License.xml"
 	NEW_SERVICE_TAG=""
 	IDRAC_HOST="169.254.0.1"
-	IDRAC_USER="john"
+	IDRAC_USER="root"
 	IDRAC_PASS=""
 	IDRAC_NIC_MODE="dedicated"
 	IPMITOOL=""

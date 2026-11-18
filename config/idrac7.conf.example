@@ -23,10 +23,9 @@ LICENSE_XML="licenses/License.xml"
 # to match your box: by default the iDRAC ships with root/calvin and stops
 # accepting it once a new account exists.
 IDRAC_HOST="169.254.0.1"
+# This box's local idrac7.conf overrides these with its own BMC account.
 IDRAC_USER="root"
 IDRAC_PASS="calvin"
-
-# This workstation's T420 uses john/1786 instead of the factory default.
 
 # Does the iDRAC use the shared NIC (host LAN) or dedicated? Informational only.
 IDRAC_NIC_MODE="dedicated"   # dedicated | shared
