@@ -31,6 +31,16 @@ IDRAC_PASS="calvin"
 IDRAC_NIC_MODE="dedicated"   # dedicated | shared
 
 #
+# --- Restore (reset-playbook.sh) -------------------------------------------
+# Post-reset network plan: DHCP (usual; a reservation returns the address)
+# or static with explicit values.
+IDRAC_IP_SOURCE="dhcp"
+IDRAC_IP_ADDR=""
+IDRAC_NETMASK="255.255.255.0"
+IDRAC_GATEWAY=""
+IDRAC_NIC="shared"            # shared | dedicated
+
+#
 # --- IPMI ----------------------------------------------------------------
 # Leave IPMITOOL empty to auto-detect from PATH.
 IPMITOOL=""

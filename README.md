@@ -60,7 +60,65 @@ iDRAC7 fw 2.65 has no Redfish license endpoint) and removes itself.
 | `healthcheck.sh` | root, Dell/12G, `dcdbas` loaded+writable, `/dev/mem` readable, license signed, tag match |
 | `unlock.sh` | fails closed on healthcheck; backs up tag to `backups/`, writes, resets iDRAC, verifies |
 | `setup-onboot.sh` | one-shot systemd unit: xterm popup → wait for latch → import → self-delete |
-| `import-license.py` | Redfish tag check + WSMAN `ImportLicense` (base64 XML, `FQDD`, `ImportOptions=1`) |
+| `idrac7-wsman.py` | remote WSMAN client: check / import / export-license / export-config / export-factory |
+| `reset-playbook.sh` | preflight + post-wipe restore over the host's KCS interface |
+
+### Remote control (WSMAN) - no console, no chroot
+
+iDRAC7 fw 2.65 has no Redfish license endpoint and refuses SSH on Express,
+but its WSMAN stack answers remotely. `idrac7-wsman.py` drives it from any
+machine that can reach the BMC:
+
+```bash
+# does the BMC see the tag the license binds to?
+scripts/idrac7-wsman.py check --host 192.168.1.171 --user root --password <pw> \
+    --license licenses/License.xml
+
+# import the license (succeeds with LIC900 once the tag has latched)
+scripts/idrac7-wsman.py import --host 192.168.1.171 --user root --password <pw> \
+    --license licenses/License.xml
+
+# export the installed license back out (proof + backup)
+scripts/idrac7-wsman.py export-license --host 192.168.1.171 --user root \
+    --password <pw> --entitlement-id DE00000009660549 --out backup.xml
+
+# full LCC config export to an NFS share (the pre-reset backup)
+scripts/idrac7-wsman.py export-config --host 192.168.1.171 --user root \
+    --password <pw> --share-ip 192.168.1.91 --share-path /srv/idrac-export \
+    --file-name t320-idrac-config.xml
+
+# factory baseline export (bare file name, CIM format)
+scripts/idrac7-wsman.py export-factory --host 192.168.1.171 --user root \
+    --password <pw> --share-ip 192.168.1.91 --share-path /srv/idrac-export \
+    --file-name factory
+```
+
+All method signatures above were discovered live by iterating the iDRAC's
+own `Missing required parameter X` errors - no docs were trusted.
+
+### Factory reset (needs a finger)
+
+iDRAC7 fw 2.65 exposes **no remote factory-reset**: no WSMAN method, no
+Redfish action (only `Manager.Reset` = graceful restart), and importing the
+LCC factory CIM queues a job that silently changes nothing (verified on a
+T320 - a probe setting survived it). The reset itself is physical:
+
+- **A.** hold the front-panel **i-button ~15 s** (12G factory-reset gesture), or
+- **B.** pull both power cords ~30 s (power drain; fixes GUI corruption,
+  does not reset users).
+
+Everything around it is scripted:
+
+```bash
+sudo ./scripts/reset-playbook.sh preflight   # on the host, BEFORE the reset
+# ... physical reset happens ...
+sudo ./scripts/reset-playbook.sh restore     # on the host, after
+```
+
+`restore` uses the host's **KCS** interface (which works even with the BMC's
+network wiped): password, channel access, DHCP/static IP, NIC selection,
+then prints the license re-import command. Keep the preflight output and a
+copy of `export-config` output - that is the restore reference.
 
 Tag visibility after a write:
 
