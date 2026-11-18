@@ -1,0 +1,71 @@
+# idrac7.conf - configuration for the IDRAC7 unlock workflow.
+#
+# Sourced as shell, so: KEY=VALUE, no spaces around =, quote anything
+# containing spaces. Keep the file mode 0600 if it holds BMC credentials.
+#
+# Copy to config/idrac7.conf (the scripts read that path) or point at it
+# with:  IDRAC7_CONF=/path/to/file ./scripts/unlock.sh
+
+#
+# --- License ---------------------------------------------------------------
+# The license XML must be signed for NEW_SERVICE_TAG. The scripts read the
+# tag out of this file, so you normally do not set NEW_SERVICE_TAG by hand.
+LICENSE_XML="licenses/License.xml"
+
+# Override only to force a specific tag (must match the XML or import fails).
+# NEW_SERVICE_TAG="9QYZF42"
+
+#
+# --- iDRAC ---------------------------------------------------------------
+# 169.254.0.1 is the iDRAC's default OS-to-iDRAC address on PowerEdge 12G.
+#
+# Defaults below are the factory Dell credential (root/calvin). Change them
+# to match your box: by default the iDRAC ships with root/calvin and stops
+# accepting it once a new account exists.
+IDRAC_HOST="169.254.0.1"
+IDRAC_USER="root"
+IDRAC_PASS="calvin"
+
+# This workstation's T420 uses john/1786 instead of the factory default.
+
+# Does the iDRAC use the shared NIC (host LAN) or dedicated? Informational only.
+IDRAC_NIC_MODE="dedicated"   # dedicated | shared
+
+#
+# --- IPMI ----------------------------------------------------------------
+# Leave IPMITOOL empty to auto-detect from PATH.
+IPMITOOL=""
+# Extra args for every ipmitool call, e.g. "-I lanplus -H 192.168.1.171"
+# Left empty when using the default OS-local KCS interface.
+IPMI_EXTRA_ARGS=""
+
+#
+# --- Postboot automation --------------------------------------------------
+# One-shot job installed by setup-onboot.sh: seconds to wait after the
+# desktop loads before the first iDRAC probe, and how many 30s retries
+# (delay x 30s = total patience before giving up).
+POSTBOOT_DELAY="60"
+POSTBOOT_RETRIES="20"
+
+#
+# --- Behaviour -----------------------------------------------------------
+# ask | yes | no   - power-cycle the host after the tag write
+# (a POST is required before the iDRAC sees the new tag and accepts the license)
+REBOOT_AFTER="ask"
+
+# cold | warm | none - reset the iDRAC management controller after the write
+# cold is the reliable one; it also makes the iDRAC re-read its own state
+IDRAC_RESET="cold"
+
+# Seconds to wait for the iDRAC to answer after a reset.
+IDRAC_RESET_WAIT="240"
+
+# Keep a timestamped copy of the original tag + all log output.
+BACKUP_DIR="backups"
+LOG_DIR="logs"
+
+# Refuse to run unless the license XML tag and the target tag agree.
+STRICT_TAG_MATCH="yes"
+
+# Full AC power cycle instructions are printed at the end when the tag does
+# not latch after a warm reboot (iDRAC needs the standby rail dropped).

@@ -1,0 +1,8 @@
+# build output
+/svctag
+/vendor/
+
+# local state (may contain credentials and the original tag)
+/config/idrac7.conf
+/backups/
+/logs/
