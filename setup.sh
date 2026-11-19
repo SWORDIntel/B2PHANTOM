@@ -43,8 +43,11 @@ run_step() {  # run_step NAME TITLE SCRIPT
 status_text() {
 	local nvram sku unit
 	nvram="$(sudo -n "$ROOT/svctag" get 2>/dev/null || echo '?')"
-	sku="$( { "$ROOT/scripts/import-license.py" --host "${IDRAC_HOST:-169.254.0.1}" \
-		--user "${IDRAC_USER:-root}" --password "${IDRAC_PASS:-calvin}" \
+	sku="$( { IDRAC_PASS="${IDRAC_PASS:-calvin}" \
+		IDRAC_TLS_PIN="${IDRAC_TLS_PIN:-}" IDRAC_TLS_CACERT="${IDRAC_TLS_CACERT:-}" \
+		IDRAC_TLS_INSECURE="${IDRAC_TLS_INSECURE:-}" \
+		"$ROOT/scripts/import-license.py" --host "${IDRAC_HOST:-169.254.0.1}" \
+		--user "${IDRAC_USER:-root}" \
 		--license "$LICENSE_XML" --tag "$(desired_tag)" \
 		--check-only 2>/dev/null || true; } \
 		| grep -o 'iDRAC service tag : .*' || echo 'iDRAC service tag : ?')"

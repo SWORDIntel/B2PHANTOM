@@ -132,13 +132,23 @@ else
 fi
 
 if command -v curl >/dev/null 2>&1 && [[ -n "${IDRAC_PASS:-}" ]]; then
-	code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 \
-		-u "$IDRAC_USER:$IDRAC_PASS" "https://$IDRAC_HOST/redfish/v1/" || echo 000)"
-	case "$code" in
-		200) check_pass "iDRAC web auth" "$IDRAC_USER@$IDRAC_HOST" ;;
-		401) check_fail "iDRAC web auth" "credentials rejected (401)" ;;
-		000) check_warn "iDRAC web auth" "no answer on https://$IDRAC_HOST" ;;
-		*)   check_warn "iDRAC web auth" "HTTP $code" ;;
+	idrac_pin          # a broken IDRAC_TLS_PIN must fail the gate, not a subshell
+	rc=0
+	code="$(idrac_curl -o /dev/null -w '%{http_code}' --max-time 10 \
+		"https://$IDRAC_HOST/redfish/v1/" 2>/dev/null)" || rc=$?
+	case "$rc" in
+		0) case "$code" in
+			200) check_pass "iDRAC web auth" "$IDRAC_USER@$IDRAC_HOST" ;;
+			401) check_fail "iDRAC web auth" "credentials rejected (401)" ;;
+			000) check_warn "iDRAC web auth" "no answer on https://$IDRAC_HOST" ;;
+			*)   check_warn "iDRAC web auth" "HTTP $code" ;;
+		   esac ;;
+		90) check_warn "iDRAC web auth" "pinned key mismatch (IDRAC_TLS_PIN)" ;;
+		60|77|83|35)
+			check_warn "iDRAC web auth" \
+				"TLS not verified (curl rc=$rc) - set IDRAC_TLS_PIN (see README)" ;;
+		7|28) check_warn "iDRAC web auth" "no answer on https://$IDRAC_HOST" ;;
+		*) check_warn "iDRAC web auth" "curl rc=$rc" ;;
 	esac
 else
 	check_warn "iDRAC web auth" "skipped (no curl or no IDRAC_PASS)"

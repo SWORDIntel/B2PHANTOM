@@ -7,3 +7,6 @@
 /backups/
 /logs/
 exports/
+recovery/
+config/*.pin
+__pycache__/

@@ -72,6 +72,9 @@ load_config() {
 	IDRAC_USER="root"
 	IDRAC_PASS=""
 	IDRAC_NIC_MODE="dedicated"
+	IDRAC_TLS_CACERT=""
+	IDRAC_TLS_PIN=""
+	IDRAC_TLS_INSECURE="no"
 	IPMITOOL=""
 	IPMI_EXTRA_ARGS=""
 	REBOOT_AFTER="ask"
@@ -93,6 +96,13 @@ load_config() {
 	[[ "$LICENSE_XML"  = /* ]] || LICENSE_XML="$ROOT_DIR/$LICENSE_XML"
 	[[ "$BACKUP_DIR"   = /* ]] || BACKUP_DIR="$ROOT_DIR/$BACKUP_DIR"
 	[[ "$LOG_DIR"      = /* ]] || LOG_DIR="$ROOT_DIR/$LOG_DIR"
+	# TLS material: a literal sha256//... pin is kept as-is, paths resolve.
+	if [[ -n "$IDRAC_TLS_PIN" && "$IDRAC_TLS_PIN" != sha256//* && "$IDRAC_TLS_PIN" != /* ]]; then
+		IDRAC_TLS_PIN="$ROOT_DIR/$IDRAC_TLS_PIN"
+	fi
+	if [[ -n "$IDRAC_TLS_CACERT" && "$IDRAC_TLS_CACERT" != /* ]]; then
+		IDRAC_TLS_CACERT="$ROOT_DIR/$IDRAC_TLS_CACERT"
+	fi
 
 	mkdir -p "$BACKUP_DIR" "$LOG_DIR"
 }
@@ -114,6 +124,58 @@ ipmi() {
 	[[ -n "${IPMITOOL:-}" ]] || return 127
 	# shellcheck disable=SC2086
 	"$IPMITOOL" ${IPMI_EXTRA_ARGS:-} "$@"
+}
+
+# ------------------------------------------------------------- iDRAC net ----
+# Credentials go to curl as a config on stdin (-K -), never in argv, and TLS
+# verification follows IDRAC_TLS_CACERT / IDRAC_TLS_PIN / IDRAC_TLS_INSECURE.
+IDRAC_PIN_VALUE=""
+
+_curl_esc() {
+	local s=$1
+	s=${s//\\/\\\\}
+	s=${s//\"/\\\"}
+	printf '%s' "$s"
+}
+
+# Resolve IDRAC_TLS_PIN (a literal sha256//... or a file holding one) into
+# IDRAC_PIN_VALUE. Sets a global rather than printing, so die() still exits
+# the script instead of a command-substitution subshell.
+idrac_pin() {
+	IDRAC_PIN_VALUE="${IDRAC_TLS_PIN:-}"
+	[[ -z "$IDRAC_PIN_VALUE" ]] && return 0
+	if [[ "$IDRAC_PIN_VALUE" != sha256//* ]]; then
+		[[ -r "$IDRAC_PIN_VALUE" ]] \
+			|| die "IDRAC_TLS_PIN=$IDRAC_PIN_VALUE is not a pin and not a readable file"
+		IDRAC_PIN_VALUE="$(sed -n 's/^[[:space:]]*\(sha256\/\/[^[:space:]]*\).*/\1/p' \
+			"$IDRAC_TLS_PIN" | head -1)"
+		[[ -n "$IDRAC_PIN_VALUE" ]] \
+			|| die "no sha256// pin in $IDRAC_TLS_PIN (capture one with: idrac7-wsman.py check --trust-cert --pin-file FILE)"
+	fi
+}
+
+# idrac_curl CURLARGS... URL - authenticated HTTPS to the iDRAC.
+idrac_curl() {
+	local -a tls=()
+	idrac_pin
+	if [[ "${IDRAC_TLS_INSECURE:-}" == yes ]]; then
+		warn "TLS verification disabled (IDRAC_TLS_INSECURE=yes)"
+		tls+=(-k)
+		[[ -n "$IDRAC_PIN_VALUE" ]] && tls+=(--pinnedpubkey "$IDRAC_PIN_VALUE")
+	else
+		if [[ -n "${IDRAC_TLS_CACERT:-}" ]]; then
+			[[ -r "$IDRAC_TLS_CACERT" ]] \
+				|| die "IDRAC_TLS_CACERT=$IDRAC_TLS_CACERT is not readable"
+			tls+=(--cacert "$IDRAC_TLS_CACERT")
+		fi
+		if [[ -n "$IDRAC_PIN_VALUE" ]]; then
+			tls+=(--pinnedpubkey "$IDRAC_PIN_VALUE")
+			# The pin replaces chain validation for expired factory certs.
+			[[ -n "${IDRAC_TLS_CACERT:-}" ]] || tls+=(-k)
+		fi
+	fi
+	printf 'user = "%s"\n' "$(_curl_esc "$IDRAC_USER:$IDRAC_PASS")" \
+		| curl -sS --proto '=https' -K - "${tls[@]}" "$@"
 }
 
 # ------------------------------------------------------------- firmware ----

@@ -116,7 +116,7 @@ restore() {
 		|| warn "BMC still settling - give it a minute"
 
 	step "5. License re-import (from any machine that can reach the BMC)"
-	info "  scripts/idrac7-wsman.py import --host ${IDRAC_HOST} --user ${IDRAC_USER} --password <pw> --license ${LICENSE_XML}"
+	info "  IDRAC_PASS=<pw> scripts/idrac7-wsman.py import --host ${IDRAC_HOST} --user ${IDRAC_USER} --license ${LICENSE_XML}"
 	info "  (the license store survives config resets; re-run only if the edition dropped)"
 
 	ok "restore complete - verify web UI and SSH now behave"

@@ -71,7 +71,12 @@ while [[ "$ATTEMPT" -lt "$POSTBOOT_RETRIES" ]]; do
 	ATTEMPT=$((ATTEMPT + 1))
 	log "attempt $ATTEMPT/$POSTBOOT_RETRIES"
 	set +e
-	"$IMPORTER" --host "$IDRAC_HOST" --user "$IDRAC_USER" --password "$IDRAC_PASS" \
+	# Credentials and TLS policy ride in the environment, not argv.
+	IDRAC_PASS="$IDRAC_PASS" \
+	IDRAC_TLS_PIN="${IDRAC_TLS_PIN:-}" \
+	IDRAC_TLS_CACERT="${IDRAC_TLS_CACERT:-}" \
+	IDRAC_TLS_INSECURE="${IDRAC_TLS_INSECURE:-}" \
+		"$IMPORTER" --host "$IDRAC_HOST" --user "$IDRAC_USER" \
 		--license "$LICENSE_XML" --tag "$TAG"
 	RC=$?
 	set -e
@@ -87,7 +92,7 @@ if [[ "$RC" -ne 0 ]]; then
 	result "IMPORT NOT COMPLETE - the iDRAC has not accepted the license."
 	result "Power off the box, pull both power cords for ~30s (drop the standby"
 	result "rail), power back on, then re-run:"
-	result "  $IMPORTER --host $IDRAC_HOST --user $IDRAC_USER --license $LICENSE_XML --tag $TAG"
+	result "  IDRAC_PASS=<pw> $IMPORTER --host $IDRAC_HOST --user $IDRAC_USER --license $LICENSE_XML --tag $TAG"
 fi
 
 # One-time unit: remove itself regardless of outcome so the next boot is clean.

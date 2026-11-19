@@ -139,9 +139,10 @@ info "DMI (boot-time cache): $DMI_NOW"
 
 IDRAC_TAG="?"
 if command -v curl >/dev/null 2>&1 && [[ -n "${IDRAC_PASS:-}" ]]; then
-	IDRAC_TAG="$(curl -sk --max-time 10 -u "$IDRAC_USER:$IDRAC_PASS" \
+	idrac_pin      # a broken IDRAC_TLS_PIN must exit here, not in the subshell
+	IDRAC_TAG="$(idrac_curl --max-time 10 \
 		"https://$IDRAC_HOST/redfish/v1/Systems/System.Embedded.1" 2>/dev/null \
-		| sed -n 's/.*"SKU":"\([^"]*\)".*/\1/p' | head -1)"
+		| sed -n 's/.*"SKU":"\([^"]*\)".*/\1/p' | head -1)" || IDRAC_TAG=""
 	[[ -n "$IDRAC_TAG" ]] || IDRAC_TAG="?"
 	info "iDRAC view           : $IDRAC_TAG"
 fi

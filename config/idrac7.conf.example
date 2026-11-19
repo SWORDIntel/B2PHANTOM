@@ -27,6 +27,18 @@ IDRAC_HOST="169.254.0.1"
 IDRAC_USER="root"
 IDRAC_PASS="calvin"
 
+# TLS. Verification is on by default, and the factory iDRAC7 certificate is
+# self-signed, expired and RSA-1024 - modern OpenSSL rejects it outright, so
+# pin its public key instead. Capture the pin once:
+#
+#   IDRAC_PASS=... scripts/idrac7-wsman.py check --host $IDRAC_HOST \
+#       --user $IDRAC_USER --trust-cert --pin-file config/idrac7.pin
+#
+# then set IDRAC_TLS_PIN to that file (or paste the sha256//... value).
+IDRAC_TLS_PIN=""              # a sha256//... pin, or a file holding one
+IDRAC_TLS_CACERT=""           # full chain verification (valid cert in the BMC)
+IDRAC_TLS_INSECURE="no"       # yes = no verification and no pinning (loud)
+
 # Does the iDRAC use the shared NIC (host LAN) or dedicated? Informational only.
 IDRAC_NIC_MODE="dedicated"   # dedicated | shared
 

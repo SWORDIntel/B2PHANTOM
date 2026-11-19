@@ -60,41 +60,62 @@ iDRAC7 fw 2.65 has no Redfish license endpoint) and removes itself.
 | `healthcheck.sh` | root, Dell/12G, `dcdbas` loaded+writable, `/dev/mem` readable, license signed, tag match |
 | `unlock.sh` | fails closed on healthcheck; backs up tag to `backups/`, writes, resets iDRAC, verifies |
 | `setup-onboot.sh` | one-shot systemd unit: xterm popup → wait for latch → import → self-delete |
-| `idrac7-wsman.py` | remote WSMAN client: check / import / export-license / export-config / export-factory |
+| `idrac7-wsman.py` | remote WSMAN client: check / import / export-license / export-config / export-factory / job-status |
 | `reset-playbook.sh` | preflight + post-wipe restore over the host's KCS interface |
 
-### Remote control (WSMAN) - no console, no chroot
+### Remote control (WSMAN) — no console, no chroot
 
 iDRAC7 fw 2.65 has no Redfish license endpoint and refuses SSH on Express,
-but its WSMAN stack answers remotely. `idrac7-wsman.py` drives it from any
-machine that can reach the BMC:
+but it answers WSMAN — and WSMAN does not care which license you bought.
+
+Credentials stay out of `argv` (`ps` shows it): the client takes
+`--password-file`, `IDRAC_PASS`, or a prompt, and hands the secret to curl on
+stdin. TLS is *pinned*, not disabled — the factory cert is self-signed,
+expired since 2021 and RSA-1024, so normal verification can never succeed:
 
 ```bash
-# does the BMC see the tag the license binds to?
-scripts/idrac7-wsman.py check --host 192.168.1.171 --user root --password <pw> \
-    --license licenses/License.xml
+export IDRAC_PASS=...
 
-# import the license (succeeds with LIC900 once the tag has latched)
-scripts/idrac7-wsman.py import --host 192.168.1.171 --user root --password <pw> \
-    --license licenses/License.xml
+# capture the BMC's public-key pin once; prints the fingerprint
+scripts/idrac7-wsman.py check --host 169.254.0.1 --user root \
+    --trust-cert --pin-file config/idrac7.pin
 
-# export the installed license back out (proof + backup)
-scripts/idrac7-wsman.py export-license --host 192.168.1.171 --user root \
-    --password <pw> --entitlement-id DE00000009660549 --out backup.xml
+# does the BMC see the tag the license binds to? (exit 2 = not yet)
+scripts/idrac7-wsman.py check --host 169.254.0.1 --user root \
+    --license licenses/License.xml --pin-file config/idrac7.pin
 
-# full LCC config export to an NFS share (the pre-reset backup)
-scripts/idrac7-wsman.py export-config --host 192.168.1.171 --user root \
-    --password <pw> --share-ip 192.168.1.91 --share-path /srv/idrac-export \
-    --file-name t320-idrac-config.xml
+# import the license (LIC900 once the tag has latched)
+scripts/idrac7-wsman.py import --host 169.254.0.1 --user root \
+    --license licenses/License.xml --pin-file config/idrac7.pin
 
-# factory baseline export (bare file name, CIM format)
-scripts/idrac7-wsman.py export-factory --host 192.168.1.171 --user root \
-    --password <pw> --share-ip 192.168.1.91 --share-path /srv/idrac-export \
-    --file-name factory
+# full LCC config export to NFS — the pre-reset backup
+scripts/idrac7-wsman.py export-config --host 169.254.0.1 --user root \
+    --share-ip 192.168.1.91 --share-path /srv/idrac-export \
+    --file-name t320-idrac-config.xml --pin-file config/idrac7.pin
 ```
 
-All method signatures above were discovered live by iterating the iDRAC's
-own `Missing required parameter X` errors - no docs were trusted.
+`ReturnValue=4096` is a promise to do something, not a receipt. The export
+commands follow the `DCIM_LifeCycleJob` instance to a terminal state and then
+check the file on the share (fresh size/mtime, XML head), so this now exits
+`3` instead of grinning at you:
+
+```
+ExportSystemConfiguration: ReturnValue=4096 []
+job JID_951008542095 queued - waiting up to 90s
+  JID_951008542095: Failed 100% - Unable to copy the Server Configuration
+  Profile to the network share.
+job failed: ... [SYS045]
+```
+
+Exit codes: `0` verified, `2` still running / cannot inspect the share,
+`3` failed, `4` misuse. `job-status --job JID_…` reads any job later, and
+`--no-wait` restores queue-and-forget (it does say `NOT verified`).
+
+→ **[WSMAN in depth](docs/wsman.md)** — TLS pinning, credential handling,
+the job state machine, and how the happy path was proven without a
+cooperating BMC.
+→ **[SYS045, the export that wasn't](docs/troubleshooting.md#sys045-the-export-that-wasnt)** —
+four kinds of evidence and one licence gate.
 
 ### Factory reset (needs a finger)
 
@@ -135,8 +156,12 @@ If a warm reboot doesn't latch it: power off, pull both power cords ~30 s
 
 Copy `config/idrac7.conf.example` → `config/idrac7.conf`, `chmod 600`.
 The example ships factory `root/calvin`; keys: `IDRAC_HOST`, `IDRAC_USER`,
-`IDRAC_PASS`, `LICENSE_XML`, `IPMITOOL`, `IPMI_EXTRA_ARGS`, `IDRAC_RESET`,
-`POSTBOOT_DELAY`, `POSTBOOT_RETRIES`.
+`IDRAC_PASS`, `IDRAC_TLS_PIN`, `IDRAC_TLS_CACERT`, `IDRAC_TLS_INSECURE`,
+`LICENSE_XML`, `IPMITOOL`, `IPMI_EXTRA_ARGS`, `IDRAC_RESET`,
+`POSTBOOT_DELAY`, `POSTBOOT_RETRIES`. `IDRAC_TLS_PIN` takes either a
+`sha256//...` value or a file holding one; leave it empty and the TLS checks
+report `TLS not verified` instead of authenticating the BMC. A broken pin
+fails the gate — it never quietly degrades to "no pin, carry on".
 
 ## restoring
 
@@ -154,7 +179,9 @@ B2PHANTOM/
 ├── svctag                     compiled binary (gitignored)
 ├── src/svctag.c               dlopen + get/set, ~300 lines
 ├── scripts/{build,common,healthcheck,unlock,setup-onboot,postboot-check}.sh
-├── scripts/import-license.py  WSMAN import client
+├── scripts/idrac7-wsman.py    remote WSMAN client (docs/wsman.md)
+├── scripts/import-license.py  thin wrapper kept for postboot-check.sh
+├── docs/{wsman,troubleshooting}.md
 ├── config/idrac7.conf.example
 ├── licenses/License.xml
 └── vendor/ backups/ logs/     all gitignored
@@ -166,14 +193,24 @@ B2PHANTOM/
 | --- | --- |
 | `lacks sysinfo_set_service_tag` | wrong libsmbios — build.sh refuses; it needs Dell's el6 2.2.27 |
 | write rc=0, tag unchanged | VM / WSL / kernel lockdown — must be bare metal |
-| healthcheck: `dcdbas` missing | `modprobe dcdbas` |
 | iDRAC still shows old tag | no POST since the write; reboot, then pull power cords |
 | import says `LIC008` | binding mismatch — tag not latched yet; the postboot job retries ~10 min |
+| curl rc=60 / `key too weak` | factory RSA-1024 cert — pin it (`--trust-cert --pin-file`) |
+| curl rc=90 | pinned key changed — different BMC or new cert; re-capture |
+| export `SYS045` | the LC never reached the network; check `DCIM_License` — network-share SCP export wants Enterprise |
+| export `4096` then silence | `4096` is *queued*; `job-status --job JID_…` |
+
+→ **[the long version](docs/troubleshooting.md)** — every symptom with its
+diagnosis, how each conclusion was established, and the one-line commands
+that produce the evidence.
 
 ## verified on
 
 Dell PowerEdge T420, BIOS 2.9.0, Debian 13, gcc 16 — iDRAC7 Express fw
 2.65. Tag `3M9M002 → 9QYZF42`, `rc=0`, read-back confirmed; WSMAN import
-call validated live (returns `LIC008` until POST). Naming credit for
-B2PHANTOM goes to a model with taste in firmware puns; the license approach
-and XML come from [tnweaver/Dell-iDRAC-7-Enterprise-Steps](https://github.com/tnweaver/Dell-iDRAC-7-Enterprise-Steps).
+call validated live (returns `LIC008` until POST); export jobs followed
+live to `SYS045`; the verified-success path exercised end to end against a
+replay of the captured fw 2.65 XML (the hardware is still on Express,
+awaiting its POST). Naming credit for B2PHANTOM goes to a model with taste
+in firmware puns; the license approach and XML come from
+[tnweaver/Dell-iDRAC-7-Enterprise-Steps](https://github.com/tnweaver/Dell-iDRAC-7-Enterprise-Steps).
