@@ -195,6 +195,27 @@ B2PHANTOM/
 | write rc=0, tag unchanged | VM / WSL / kernel lockdown — must be bare metal |
 | iDRAC still shows old tag | no POST since the write; reboot, then pull power cords |
 | import says `LIC008` | binding mismatch — tag not latched yet; the postboot job retries ~10 min |
+| postboot log: `xterm: DISPLAY is not set` | display race — rerun `postboot-terminal.sh` or import manually |
+
+### The POST warning after a tag change (normal, no bypass button)
+
+On the first boot after the tag write, the 12G Lifecycle Controller may
+stop POST with a plain message like *"this license doesn't support
+motherboard swap"* and no visible way past it. The system has not broken:
+the LCC is reacting to the changed service tag as if the motherboard were
+swapped, and without an LCC entitlement it just complains. Power through it
+(a keystroke or timeout clears it; if truly stuck, power off/on once) and
+continue booting. The warning stops once the iDRAC re-latches the new tag
+and the license imports.
+
+### Known firmware-level limit (2.65.65.65)
+
+On both fleet boxes the web GUI (`/start.html` 404) and SSH password logins
+fail for *every* account with or without the Enterprise license, before and
+after a same-version reflash. There is no remote factory-reset on this
+firmware (no WSMAN method, no Redfish action, no F2 option, i-button
+gesture unreliable), so treat GUI+SSH as unavailable and drive the BMC via
+Redfish/WSMAN/IPMI - everything in this repo does exactly that.
 | curl rc=60 / `key too weak` | factory RSA-1024 cert — pin it (`--trust-cert --pin-file`) |
 | curl rc=90 | pinned key changed — different BMC or new cert; re-capture |
 | export `SYS045` | the LC never reached the network; check `DCIM_License` — network-share SCP export wants Enterprise |

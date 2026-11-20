@@ -59,9 +59,9 @@ TERM_BIN="$(command -v xterm || command -v konsole || true)"
 
 mkdir -p "$UNIT_DIR"
 
-# The unit starts at the graphical session, waits POSTBOOT_DELAY seconds,
-# then runs the checker inside a visible terminal. Type=oneshot +
-# ExecStart=xterm means the terminal IS the job's foreground process.
+# The unit starts at the graphical session and the wrapper waits for a
+# usable display (up to 10 min, then falls back to headless), fixing the
+# race where the display is not up yet when the unit fires.
 cat >"$UNIT_FILE" <<EOF
 [Unit]
 Description=iDRAC7 license postboot import (one-shot)
@@ -70,8 +70,8 @@ PartOf=graphical-session.target
 
 [Service]
 Type=oneshot
-ExecStart=$TERM_BIN -T "B2PHANTOM Postboot" -e $POSTBOOT --interactive --as-service
-TimeoutSec=1200
+ExecStart=$SCRIPTS_DIR/postboot-terminal.sh
+TimeoutSec=1800
 
 [Install]
 WantedBy=graphical-session.target
