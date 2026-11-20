@@ -100,14 +100,23 @@ restore() {
 	fi
 
 	step "3. NIC selection"
+	# 12G wants "shared with lom1" as one argument; plain "shared" is
+	# rejected. If the BMC refuses OEM NIC changes entirely (rsp 0xd5,
+	# 'not supported in present state' - seen on a T320 after factory
+	# reset), keep the current NIC and say so - network may still work.
 	case "${IDRAC_NIC:-shared}" in
-		shared)     ipmi delloem lan set shared 2>/dev/null \
-				&& ok "NIC selection: shared LOM" \
-				|| warn "delloem lan set shared failed - set in web UI later" ;;
-		dedicated)  ipmi delloem lan set dedicated 2>/dev/null \
+		shared)
+			if ipmi delloem lan set 'shared with lom1' 2>/dev/null; then
+				ok "NIC selection: shared LOM1"
+			else
+				warn "NIC switch refused by BMC - set via F2 iDRAC Settings"
+			fi ;;
+		dedicated)
+			ipmi delloem lan set dedicated 2>/dev/null \
 				&& ok "NIC selection: dedicated" \
 				|| warn "delloem lan set dedicated failed" ;;
-		*)          warn "IDRAC_NIC=$IDRAC_NIC not shared/dedicated - skipping" ;;
+		*)
+			warn "IDRAC_NIC=$IDRAC_NIC not shared/dedicated - skipping" ;;
 	esac
 
 	step "4. Verify BMC answers"
