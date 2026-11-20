@@ -143,3 +143,17 @@ Two habits worth keeping: correlate by `RecordID`/`CreationTimeStamp`, not by
 eyeballing the last lines (the enumeration order is not chronological), and
 always run a negative control — a deliberately broken target — before
 believing a "no traffic" or "no error" observation.
+
+## When the LC itself is wedged
+
+An iDRAC that emits requests but never consumes replies is not a share
+problem. The tell is that *every* share fails identically and instantly —
+reachable or not, NFS or CIFS — with no packets leaving the BMC. That points
+at the Lifecycle Controller's own state, most often after a defaults reset
+(the certificate regenerating is the fingerprint of one).
+
+The remedy is a **stock reflash** through the web UI plus a standby-rail
+power drain. A patched firmware image is not an option: the image is signed
+by Dell with a DSA key whose private half does not exist outside Dell, and
+the verifier rejects anything unverified. The evidence, the verifier's error
+codes and the tooling used to establish this: [firmware.md](firmware.md).

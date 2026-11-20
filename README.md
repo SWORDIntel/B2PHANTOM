@@ -181,7 +181,7 @@ B2PHANTOM/
 ├── scripts/{build,common,healthcheck,unlock,setup-onboot,postboot-check}.sh
 ├── scripts/idrac7-wsman.py    remote WSMAN client (docs/wsman.md)
 ├── scripts/import-license.py  thin wrapper kept for postboot-check.sh
-├── docs/{wsman,troubleshooting}.md
+├── docs/{wsman,troubleshooting,firmware}.md
 ├── config/idrac7.conf.example
 ├── licenses/License.xml
 └── vendor/ backups/ logs/     all gitignored

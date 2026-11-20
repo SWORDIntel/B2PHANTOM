@@ -11,3 +11,4 @@ recovery/
 config/*.pin
 __pycache__/
 config/pins/
+*.core
